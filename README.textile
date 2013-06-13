@@ -1,0 +1,100 @@
+h2. Redmine plugin views revisions plugin
+
+This plugin tries to solve problem that is caused by inability to monkey-patch views in the Redmine.
+
+Because of that authors of plugins are unable to maintain different sets of .erb files in their plugins distribution package.
+
+So authors have to create different distribution sets for every different version of .erb files or just support latest one.
+
+Using rake task provided with this plugin and special folders structure and view names allows authors to keep one distribution package that will support different Redmine versions.
+
+h3. Rake task
+
+Rake task called *redmine:plugins:process_version_change* and has following attributes:
+
+| *plugins* | List of plugins folders to process, could be skipped. In this case all plugins are processed |
+| *log* | Name of the log file. If not present, _stdout_ is used |
+
+h3. How this works
+
+For this task to process plugin, plugin should have folder named *rev* in its root folder. Folders in this folder mirror folder structure of the plugin folder tree.
+
+Each file in folder has following pattern:
+
+*revision(=|!)-version_high.version_low.version_tiny(=|!)-original_filename*
+
+* *revision*
+ Lowest revision number for which this file should be used. Could be omitted if version presents.
+* *version_high.version_low.version_tiny*
+ Lowest version number in major.minor.tiny format for which this file should be used. Could be omitted if revision presents.
+* *(=|!)*
+ Optional. One of the following symbols:
+ *@=@* - means that this file should be used only for this *exact* version/revision
+ *@!@* - means that if Redmine version/revision is higher than this, this file should be removed from plugin folder
+
+h3. Example
+
+Let's say we have plugin that has modifications in files *app/views/issues/new.html.erb* and *app/views/messages/_form.html.erb*
+
+Redmine has different version of first file starting from revision *7723*, also this file changed in version *1.4.1*. Second file is changed in version *1.4.1*. Also for version *1.3.1* exists another special version of this file. And starting from version *2.0.0* this file is not used at all (renamed, let's say).
+
+In this case we should have following folder and files structure in plugin root folder:
+
+<pre>
+rev/
+   app/
+      views/
+         issues/
+            0000-new.html.erb
+            7723-new.html.erb
+            1.4.1-new.html.erb
+         messages/
+            1.3.0-_form.html.erb
+            1.3.1=-_form.html.erb
+            1.4.1-_form.html.erb
+            1.9.9!-_form.html.erb
+</pre>
+
+Now lets consider following cases:
+
+# Redmine version 1.3.2, revision is 7800
+ Files selected: *7723-new.html.erb* and *1.4.1-_form.html.erb*
+# Redmine version 1.3.1, revision is unknown but is less than 7723
+ Files selected: *0000-new.html.erb* and *1.3.1!-_form.html.erb*
+# Redmine version 2.0.0, revision is unknown
+ File selected *1.4.1-new.html.erb*, file *_form.html.erb* is removed from _app/views/messages_ folder
+
+For 'real-life' example please check my "Board watchers plugin":http://www.redmine.org/plugins/redmine_boards_watchers
+
+h3. File selection rules
+
+*Files validity check*
+
+# Filename has revision only
+ If revision of Redmine is unknown then revision is taken from *redmine_revisions.yml* file. File is valid if Redmine revision is higher or equal. If equal sign presents file is valid *only* if the revision matches redmine revision
+# Filename has only version
+ File is valid if Redmine version is higher or equal. If equal sign presents file is valid *only* if the version matches Redmine version
+# Filename has both version and revision
+## If revision of redmine is known then rules for revision apply
+## If revision of redmine is unknown then rules for version apply
+
+*Selection rules*
+
+If there are file that has equal sign it is chosen, otherwise file with highest revision/version is chosen.
+
+h3. Special files
+
+Plugin checks for two special files in Rails root folder:
+
+# *.version*
+ If exists used for current version override. Should contain string in format XX.YY.ZZ (major,minor,tiny).
+# *.revision*
+ If exists used to determine current revision of Redmine. Should contain numeric value which is considered as revision number or word *.ignore* - in this case revision would be excluded from process.
+# *<plugin_root>/config/redmine_revisions.yml*
+ This file contains mapping between revisions and versions of the Redmine.
+
+h3. History
+
+0.0.1
+
+* Initial release
